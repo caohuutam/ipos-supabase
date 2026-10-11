@@ -145,9 +145,18 @@ async function initSupa() {
   if (supa) return supa;
   if (!SUPA_URL || SUPA_URL.indexOf("xyzcompany") >= 0)
     throw new Error("Chưa điền SUPA_URL và SUPA_ANON ở đầu file. Xem hướng dẫn.");
-  var mod = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm");
-  supa = mod.createClient(SUPA_URL, SUPA_ANON);
-  return supa;
+  var timeout = new Promise(function (_, reject) {
+    setTimeout(function () { reject(new Error("Không kết nối được Supabase sau 20 giây. Kiểm tra: 1) Project còn hoạt động (Supabase dashboard), 2) SUPA_URL đúng, 3) mạng điện thoại.")); }, 20000);
+  });
+  var start = (async function () {
+    var mod = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm");
+    supa = mod.createClient(SUPA_URL, SUPA_ANON);
+    // kiểm tra kết nối thật bằng 1 truy vấn nhẹ
+    var r = await supa.from("cai_dat").select("khoa").limit(1);
+    if (r.error) throw new Error("Supabase báo lỗi: " + r.error.message);
+    return supa;
+  })();
+  return Promise.race([start, timeout]);
 }
 
 /* ============ GỌI SUPABASE ============ */
@@ -312,11 +321,11 @@ function login() {
   var v = document.getElementById("pin").value.trim();
   if (!v) return;
   TOKEN = v;
-  localStorage.setItem("ipos_token", v);
+  localStorage.setItem("ipos_supabase_token", v);
   boot();
 }
 function logout() {
-  TOKEN = ""; localStorage.removeItem("ipos_token");
+  TOKEN = ""; localStorage.removeItem("ipos_supabase_token");
   document.getElementById("app").classList.add("hidden");
   document.getElementById("pin-screen").classList.remove("hidden");
 }

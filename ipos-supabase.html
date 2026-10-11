@@ -99,7 +99,7 @@
     <input id="pin" type="password" inputmode="numeric" placeholder="Mã quán" autocomplete="off">
     <div class="err" id="pin-err"></div>
     <button class="btn btn-primary" onclick="login()">Vào làm</button>
-    <p style="color:#aaa;font-size:11px;margin-bottom:0">bản 2026-10-11d</p>
+    <p style="color:#aaa;font-size:11px;margin-bottom:0">bản 2026-10-11e</p>
   </div>
 </div>
 
@@ -170,6 +170,37 @@ async function sapi(method, path, body, prefer) {
   } finally { clearTimeout(timer); }
 }
 function q(v) { return encodeURIComponent(v); }
+
+/* Các hàm tiện ích dùng chung */
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+  });
+}
+function fmt(n) { return (+n || 0).toLocaleString("vi-VN"); }
+function fmtDT(iso) {
+  if (!iso) return "";
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso);
+  var p = function (x) { return String(x).padStart(2, "0"); };
+  return p(d.getDate()) + "/" + p(d.getMonth() + 1) + "/" + d.getFullYear() + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+}
+function toast(msg) {
+  var t = document.getElementById("toast");
+  if (!t) {
+    t = document.createElement("div");
+    t.id = "toast";
+    t.style.cssText = "position:fixed;left:50%;bottom:70px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:8px;font-size:14px;z-index:9999;max-width:90vw;text-align:center";
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.display = "block";
+  clearTimeout(t._h);
+  t._h = setTimeout(function () { t.style.display = "none"; }, 2500);
+}
+function needPin(body) {
+  if (!TOKEN) throw new Error("Chưa đăng nhập, tải lại trang và nhập mã quán");
+}
 
 async function nextId(table, key, prefix) {
   var rows = await sapi("GET", table + "?select=" + key + "&" + key + "=like." + q(prefix + "*") + "&order=" + key + ".desc&limit=1");

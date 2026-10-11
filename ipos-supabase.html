@@ -99,7 +99,7 @@
     <input id="pin" type="password" inputmode="numeric" placeholder="Mã quán" autocomplete="off">
     <div class="err" id="pin-err"></div>
     <button class="btn btn-primary" onclick="login()">Vào làm</button>
-    <p style="color:#aaa;font-size:11px;margin-bottom:0">bản 2026-10-11c</p>
+    <p style="color:#aaa;font-size:11px;margin-bottom:0">bản 2026-10-11d</p>
   </div>
 </div>
 
@@ -140,101 +140,106 @@ var CUR_ORDER = null;
 var CUR_ORDER_DATA = null;
 var CUR_BILL = null, LAST_BILL = null;
 var CUR_CAT = "Tất cả";
-var supa = null;
+var supaReady = false;
 
-async function initSupa() {
-  if (supa) return supa;
+/* Gọi REST API của Supabase bằng fetch thường (không cần thư viện ngoài).
+   Mỗi request có timeout 15 giây nên không bao giờ treo ở "Đang tải..." mãi. */
+async function sapi(method, path, body, prefer) {
   if (!SUPA_URL || SUPA_URL.indexOf("xyzcompany") >= 0)
-    throw new Error("Chưa điền SUPA_URL và SUPA_ANON ở đầu file. Xem hướng dẫn.");
-  var timeout = new Promise(function (_, reject) {
-    setTimeout(function () { reject(new Error("Không kết nối được Supabase sau 20 giây. Kiểm tra: 1) Project còn hoạt động (Supabase dashboard), 2) SUPA_URL đúng, 3) mạng điện thoại.")); }, 20000);
-  });
-  var start = (async function () {
-    var mod = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm");
-    supa = mod.createClient(SUPA_URL, SUPA_ANON);
-    // kiểm tra kết nối thật bằng 1 truy vấn nhẹ
-    var r = await supa.from("cai_dat").select("khoa").limit(1);
-    if (r.error) throw new Error("Supabase báo lỗi: " + r.error.message);
-    return supa;
-  })();
-  return Promise.race([start, timeout]);
+    throw new Error("Chưa điền SUPA_URL và SUPA_ANON ở đầu file.");
+  var ctl = new AbortController();
+  var timer = setTimeout(function () { ctl.abort(); }, 15000);
+  try {
+    var h = { "apikey": SUPA_ANON, "Authorization": "Bearer " + SUPA_ANON };
+    var opt = { method: method, headers: h, signal: ctl.signal };
+    if (body !== undefined) { h["Content-Type"] = "application/json"; opt.body = JSON.stringify(body); }
+    if (prefer) h["Prefer"] = prefer;
+    var res = await fetch(SUPA_URL + "/rest/v1/" + path, opt);
+    var txt = await res.text();
+    var data = null;
+    try { data = txt ? JSON.parse(txt) : null; } catch (e) { data = null; }
+    if (!res.ok) {
+      var msg = (data && (data.message || data.error || data.hint)) || txt || ("HTTP " + res.status);
+      throw new Error("Supabase lỗi " + res.status + ": " + String(msg).slice(0, 160));
+    }
+    return data;
+  } catch (e) {
+    if (e && e.name === "AbortError")
+      throw new Error("Không kết nối được Supabase (quá 15 giây). Kiểm tra mạng và Project URL.");
+    throw e;
+  } finally { clearTimeout(timer); }
 }
+function q(v) { return encodeURIComponent(v); }
 
-/* ============ GỌI SUPABASE ============ */
-async function sb(q) { var r = await q; if (r.error) throw new Error(r.error.message); return r.data; }
-function needPin(body) { if (body.token !== DEFAULT_PIN) throw new Error("Sai mã quán. Mã thử nghiệm: " + DEFAULT_PIN); }
-function fmtDT(iso) {
-  if (!iso) return "";
-  var d = new Date(iso), p = function (n) { return String(n).padStart(2, "0"); };
-  return p(d.getDate()) + "/" + p(d.getMonth() + 1) + "/" + d.getFullYear() + " " + p(d.getHours()) + ":" + p(d.getMinutes());
-}
 async function nextId(table, key, prefix) {
-  var rows = await sb(supa.from(table).select(key).like(key, prefix + "%").order(key, { ascending: false }).limit(1));
+  var rows = await sapi("GET", table + "?select=" + key + "&" + key + "=like." + q(prefix + "*") + "&order=" + key + ".desc&limit=1");
   var n = 0;
-  if (rows.length) { var m = String(rows[0][key]).match(/(\d+)$/); if (m) n = parseInt(m[1], 10); }
+  if (rows && rows.length) { var m = String(rows[0][key]).match(/(\d+)$/); if (m) n = parseInt(m[1], 10); }
   return prefix + String(n + 1).padStart(3, "0");
 }
+
 async function apiGet(p) {
-  await initSupa();
   switch (p.api) {
     case "config": {
-      var rows = await sb(supa.from("cai_dat").select("khoa,gia_tri"));
-      var c = {}; rows.forEach(function (r) { c[r.khoa] = r.gia_tri; });
+      var rows = await sapi("GET", "cai_dat?select=khoa,gia_tri");
+      var c = {}; (rows || []).forEach(function (r) { c[r.khoa] = r.gia_tri; });
       return { ten_nha_hang: c.ten_nha_hang || "Nhà hàng", dia_chi: c.dia_chi || "", sdt: c.sdt || "",
         vat: +(c.vat_mac_dinh) || 0, qr_bat: c.qr_bat || "TAT",
         qr_ngan_hang: c.qr_ngan_hang || "", qr_so_tk: c.qr_so_tk || "", qr_chu_tk: c.qr_chu_tk || "" };
     }
     case "menu":
-      return sb(supa.from("mon_an").select("*").eq("trang_thai", "DANG_BAN").order("ma_mon"));
+      return sapi("GET", "mon_an?select=*&trang_thai=eq.DANG_BAN&order=ma_mon");
     case "tables":
-      return sb(supa.from("ban").select("*").order("ma_ban"));
+      return sapi("GET", "ban?select=*&order=ma_ban");
     case "openOrders": {
-      var oo = await sb(supa.from("don_hang").select("ma_don,ma_ban,ten_ban,gio_vao,tong_tien").eq("trang_thai", "DANG_PHUC_VU").order("gio_vao"));
-      return oo.map(function (r) { return { ma_don: r.ma_don, ma_ban: r.ma_ban, ten_ban: r.ten_ban, gio_vao: fmtDT(r.gio_vao), tong_tien: +r.tong_tien || 0 }; });
+      var oo = await sapi("GET", "don_hang?select=ma_don,ma_ban,ten_ban,gio_vao,tong_tien&trang_thai=eq.DANG_PHUC_VU&order=gio_vao");
+      return (oo || []).map(function (r) { return { ma_don: r.ma_don, ma_ban: r.ma_ban, ten_ban: r.ten_ban,
+        gio_vao: fmtDT(r.gio_vao), tong_tien: +r.tong_tien || 0 }; });
     }
     case "order": {
-      var dh = await sb(supa.from("don_hang").select("*").eq("ma_don", p.ma_don).limit(1));
-      if (!dh.length) throw new Error("Không tìm thấy đơn " + p.ma_don);
+      var dh = await sapi("GET", "don_hang?select=*&ma_don=eq." + q(p.ma_don) + "&limit=1");
+      if (!dh || !dh.length) throw new Error("Không tìm thấy đơn " + p.ma_don);
       var d = dh[0];
-      var items = await sb(supa.from("chi_tiet_don").select("*").eq("ma_don", p.ma_don).order("id"));
+      var items = await sapi("GET", "chi_tiet_don?select=*&ma_don=eq." + q(p.ma_don) + "&order=id");
       return { ma_don: d.ma_don, ma_ban: d.ma_ban, ten_ban: d.ten_ban, gio_vao: fmtDT(d.gio_vao),
         trang_thai: d.trang_thai, tong_tien: +d.tong_tien || 0, giam_gia: +d.giam_gia || 0, ghi_chu: d.ghi_chu,
-        items: items.map(function (x) { return { ma_mon: x.ma_mon, ten_mon: x.ten_mon, so_luong: +x.so_luong || 0,
+        items: (items || []).map(function (x) { return { ma_mon: x.ma_mon, ten_mon: x.ten_mon, so_luong: +x.so_luong || 0,
           don_gia: +x.don_gia || 0, thanh_tien: +x.thanh_tien || 0, ghi_chu: x.ghi_chu, trang_thai_bep: x.trang_thai_bep }; }) };
     }
     case "kitchen": {
-      var kr = await sb(supa.from("chi_tiet_don").select("*").in("trang_thai_bep", ["CHO_LAM", "DANG_LAM"]).order("gio_goi"));
-      var dhs = await sb(supa.from("don_hang").select("ma_don,ten_ban").eq("trang_thai", "DANG_PHUC_VU"));
-      var tb = {}; dhs.forEach(function (x) { tb[x.ma_don] = x.ten_ban; });
-      return kr.map(function (x) { return { ma_don: x.ma_don, ten_ban: tb[x.ma_don] || "", ma_mon: x.ma_mon,
+      var kr = await sapi("GET", "chi_tiet_don?select=*&trang_thai_bep=in.(CHO_LAM,DANG_LAM)&order=gio_goi");
+      var dhs = await sapi("GET", "don_hang?select=ma_don,ten_ban&trang_thai=eq.DANG_PHUC_VU");
+      var tb = {}; (dhs || []).forEach(function (x) { tb[x.ma_don] = x.ten_ban; });
+      return (kr || []).map(function (x) { return { ma_don: x.ma_don, ten_ban: tb[x.ma_don] || "", ma_mon: x.ma_mon,
         ten_mon: x.ten_mon, so_luong: +x.so_luong || 0, ghi_chu: x.ghi_chu,
         trang_thai_bep: x.trang_thai_bep, gio_goi: fmtDT(x.gio_goi) }; });
     }
-    case "report": return sbReport(p.che_do, p.gia_tri);
+    case "report": return restReport(p.che_do, p.gia_tri);
     default: throw new Error("API không hỗ trợ: " + p.api);
   }
 }
+
 async function apiPost(body) {
-  await initSupa();
   needPin(body);
   switch (body.action) {
     case "createOrder": {
-      var b = await sb(supa.from("ban").select("*").eq("ma_ban", body.ma_ban).limit(1));
-      if (!b.length) throw new Error("Không tìm thấy bàn " + body.ma_ban);
+      var b = await sapi("GET", "ban?select=*&ma_ban=eq." + q(body.ma_ban) + "&limit=1");
+      if (!b || !b.length) throw new Error("Không tìm thấy bàn " + body.ma_ban);
       if (b[0].trang_thai !== "TRONG") throw new Error("Bàn " + b[0].ten_ban + " đang bận");
       var maDon = await nextId("don_hang", "ma_don", "DH");
       var cfg = await apiGet({ api: "config" });
-      await sb(supa.from("don_hang").insert({ ma_don: maDon, ma_ban: body.ma_ban, ten_ban: b[0].ten_ban,
+      await sapi("POST", "don_hang", { ma_don: maDon, ma_ban: body.ma_ban, ten_ban: b[0].ten_ban,
         gio_vao: new Date().toISOString(), trang_thai: "DANG_PHUC_VU", tong_tien: 0, giam_gia: 0,
-        vat: cfg.vat, phai_thu: 0, nhan_vien: body.nhan_vien || "", ghi_chu: body.ghi_chu || "" }));
-      await sb(supa.from("ban").update({ trang_thai: "DANG_PHUC_VU" }).eq("ma_ban", body.ma_ban));
+        vat: cfg.vat, phai_thu: 0, nhan_vien: body.nhan_vien || "", ghi_chu: body.ghi_chu || "" },
+        "return=representation");
+      await sapi("PATCH", "ban?ma_ban=eq." + q(body.ma_ban), { trang_thai: "DANG_PHUC_VU" });
       return { ok: true, ma_don: maDon };
     }
     case "addItems": {
-      var dh = await sb(supa.from("don_hang").select("ma_don,trang_thai").eq("ma_don", body.ma_don).limit(1));
-      if (!dh.length || dh[0].trang_thai !== "DANG_PHUC_VU") throw new Error("Đơn không còn phục vụ");
-      var menu = await sb(supa.from("mon_an").select("ma_mon,ten_mon,don_gia"));
-      var mm = {}; menu.forEach(function (m) { mm[m.ma_mon] = m; });
+      var dh = await sapi("GET", "don_hang?select=ma_don,trang_thai&ma_don=eq." + q(body.ma_don) + "&limit=1");
+      if (!dh || !dh.length || dh[0].trang_thai !== "DANG_PHUC_VU") throw new Error("Đơn không còn phục vụ");
+      var menu = await sapi("GET", "mon_an?select=ma_mon,ten_mon,don_gia");
+      var mm = {}; (menu || []).forEach(function (m) { mm[m.ma_mon] = m; });
       var t = new Date().toISOString(), rows = [];
       (body.items || []).forEach(function (it) {
         var m = mm[it.ma_mon];
@@ -244,56 +249,60 @@ async function apiPost(body) {
         rows.push({ ma_don: body.ma_don, ma_mon: m.ma_mon, ten_mon: m.ten_mon, so_luong: sl,
           don_gia: dg, thanh_tien: sl * dg, ghi_chu: it.ghi_chu || "", trang_thai_bep: "CHO_LAM", gio_goi: t });
       });
-      if (rows.length) await sb(supa.from("chi_tiet_don").insert(rows));
+      if (rows.length) await sapi("POST", "chi_tiet_don", rows, "return=representation");
       await recalc(body.ma_don);
       return { ok: true };
     }
     case "setKitchen": {
-      var ks = await sb(supa.from("chi_tiet_don").select("id").eq("ma_don", body.ma_don).eq("ma_mon", body.ma_mon)
-        .in("trang_thai_bep", ["CHO_LAM", "DANG_LAM"]).order("id").limit(1));
-      if (!ks.length) throw new Error("Không tìm thấy món trong bếp");
-      await sb(supa.from("chi_tiet_don").update({ trang_thai_bep: body.trang_thai }).eq("id", ks[0].id));
+      var ks = await sapi("GET", "chi_tiet_don?select=id&ma_don=eq." + q(body.ma_don) + "&ma_mon=eq." + q(body.ma_mon) +
+        "&trang_thai_bep=in.(CHO_LAM,DANG_LAM)&order=id&limit=1");
+      if (!ks || !ks.length) throw new Error("Không tìm thấy món trong bếp");
+      await sapi("PATCH", "chi_tiet_don?id=eq." + ks[0].id, { trang_thai_bep: body.trang_thai });
       return { ok: true };
     }
     case "checkout": {
-      var d2 = await sb(supa.from("don_hang").select("*").eq("ma_don", body.ma_don).limit(1));
-      if (!d2.length || d2[0].trang_thai !== "DANG_PHUC_VU") throw new Error("Đơn không còn phục vụ");
+      var d2 = await sapi("GET", "don_hang?select=*&ma_don=eq." + q(body.ma_don) + "&limit=1");
+      if (!d2 || !d2.length || d2[0].trang_thai !== "DANG_PHUC_VU") throw new Error("Đơn không còn phục vụ");
       var tong = await recalc(body.ma_don);
       var giam = +body.giam_gia || 0;
       var cfg2 = await apiGet({ api: "config" });
       var phaiThu = Math.round((tong - giam) * (1 + cfg2.vat / 100));
       var maTT = await nextId("thanh_toan", "ma_tt", "TT");
-      await sb(supa.from("thanh_toan").insert({ ma_tt: maTT, ma_don: body.ma_don,
+      await sapi("POST", "thanh_toan", { ma_tt: maTT, ma_don: body.ma_don,
         hinh_thuc: body.hinh_thuc || "TIEN_MAT", so_tien: phaiThu,
-        thoi_gian: new Date().toISOString(), nhan_vien: body.nhan_vien || "" }));
-      await sb(supa.from("don_hang").update({ gio_ra: new Date().toISOString(), trang_thai: "DA_THANH_TOAN",
-        giam_gia: giam, phai_thu: phaiThu }).eq("ma_don", body.ma_don));
-      await sb(supa.from("ban").update({ trang_thai: "TRONG" }).eq("ma_ban", d2[0].ma_ban));
+        thoi_gian: new Date().toISOString(), nhan_vien: body.nhan_vien || "" }, "return=representation");
+      await sapi("PATCH", "don_hang?ma_don=eq." + q(body.ma_don),
+        { gio_ra: new Date().toISOString(), trang_thai: "DA_THANH_TOAN", giam_gia: giam, phai_thu: phaiThu });
+      await sapi("PATCH", "ban?ma_ban=eq." + q(d2[0].ma_ban), { trang_thai: "TRONG" });
       return { ok: true, ma_tt: maTT, phai_thu: phaiThu };
     }
     case "saveConfig": {
       var vals = body.cau_hinh || {}, keys = Object.keys(vals);
       for (var i = 0; i < keys.length; i++)
-        await sb(supa.from("cai_dat").upsert({ khoa: keys[i], gia_tri: String(vals[keys[i]]) }, { onConflict: "khoa" }));
+        await sapi("POST", "cai_dat", { khoa: keys[i], gia_tri: String(vals[keys[i]]) },
+          "resolution=merge-duplicates,return=representation");
       return { ok: true };
     }
     default: throw new Error("Action không hỗ trợ: " + body.action);
   }
 }
+
 async function recalc(maDon) {
-  var rows = await sb(supa.from("chi_tiet_don").select("thanh_tien").eq("ma_don", maDon));
+  var rows = await sapi("GET", "chi_tiet_don?select=thanh_tien&ma_don=eq." + q(maDon));
   var tong = 0;
-  rows.forEach(function (r) { tong += +r.thanh_tien || 0; });
-  await sb(supa.from("don_hang").update({ tong_tien: tong }).eq("ma_don", maDon));
+  (rows || []).forEach(function (r) { tong += +r.thanh_tien || 0; });
+  await sapi("PATCH", "don_hang?ma_don=eq." + q(maDon), { tong_tien: tong });
   return tong;
 }
+
 function shiftDate(ymd, days) {
   var d = new Date(ymd + "T00:00:00+07:00");
   d.setDate(d.getDate() + days);
   var p = function (n) { return String(n).padStart(2, "0"); };
   return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
 }
-async function sbReport(che_do, gia_tri) {
+
+async function restReport(che_do, gia_tri) {
   var from, to;
   if (che_do === "ngay") { from = gia_tri + "T00:00:00+07:00"; to = shiftDate(gia_tri, 1) + "T00:00:00+07:00"; }
   else if (che_do === "thang") {
@@ -301,12 +310,12 @@ async function sbReport(che_do, gia_tri) {
     from = gia_tri + "-01T00:00:00+07:00";
     to = (m === 12 ? (+y + 1) + "-01" : y + "-" + String(m + 1).padStart(2, "0")) + "-01T00:00:00+07:00";
   } else { var yy = +gia_tri; from = yy + "-01-01T00:00:00+07:00"; to = (yy + 1) + "-01-01T00:00:00+07:00"; }
-  var tt = await sb(supa.from("thanh_toan").select("ma_don,so_tien").gte("thoi_gian", from).lt("thoi_gian", to));
-  var ct = await sb(supa.from("chi_tiet_don").select("ma_mon,ten_mon,so_luong,thanh_tien").gte("gio_goi", from).lt("gio_goi", to));
+  var tt = await sapi("GET", "thanh_toan?select=ma_don,so_tien&thoi_gian=gte." + q(from) + "&thoi_gian=lt." + q(to));
+  var ct = await sapi("GET", "chi_tiet_don?select=ma_mon,ten_mon,so_luong,thanh_tien&gio_goi=gte." + q(from) + "&gio_goi=lt." + q(to));
   var doanhThu = 0, dons = {};
-  tt.forEach(function (r) { doanhThu += (+r.so_tien || 0); dons[r.ma_don] = 1; });
+  (tt || []).forEach(function (r) { doanhThu += (+r.so_tien || 0); dons[r.ma_don] = 1; });
   var soMon = 0, byMon = {};
-  ct.forEach(function (r) {
+  (ct || []).forEach(function (r) {
     var sl = +r.so_luong || 0; soMon += sl;
     var k = r.ma_mon;
     if (!byMon[k]) byMon[k] = { ma_mon: r.ma_mon, ten_mon: r.ten_mon, so_luong: 0, doanh_thu: 0 };
@@ -357,7 +366,7 @@ function go(v) {
     b.classList.toggle("active", b.dataset.v === v);
   });
   document.getElementById("view-" + v).classList.remove("hidden");
-  if (typeof BEP_CHANNEL !== "undefined" && BEP_CHANNEL && supa) { supa.removeChannel(BEP_CHANNEL); BEP_CHANNEL = null; }
+  if (BEP_TIMER) { clearInterval(BEP_TIMER); BEP_TIMER = null; }
   if (v === "ban") renderTables();
   if (v === "bep") { renderKitchen(true); subKitchen(); }
   if (v === "thungan") renderCashier();
@@ -475,7 +484,7 @@ function sendToKitchen() {
     .catch(function (e) { toast(e.message); b.disabled = false; b.textContent = "Gửi bếp"; });
 }
 /* ============ BẾP (máy in phiếu bếp) ============ */
-var BEP_CHANNEL = null;
+var BEP_TIMER = null;
 var SEEN_KEY = "ipos_sb_kitchen_seen";
 var AUTO_KEY = "ipos_sb_kitchen_autoprint";
 
@@ -504,13 +513,12 @@ function beep() {
   } catch (e) {}
 }
 
-async function subKitchen() {
-  await initSupa();
-  if (BEP_CHANNEL) return;
-  BEP_CHANNEL = supa.channel("bep-live")
-    .on("postgres_changes", { event: "*", schema: "public", table: "chi_tiet_don" },
-      function () { renderKitchen(false); })
-    .subscribe();
+function subKitchen() {
+  if (BEP_TIMER) return;
+  BEP_TIMER = setInterval(function () {
+    var v = document.getElementById("view-bep");
+    if (v && !v.classList.contains("hidden")) renderKitchen(false);
+  }, 15000);
 }
 function renderKitchen(first) {
   var el = document.getElementById("view-bep");
@@ -543,7 +551,7 @@ function renderKitchenGroups(el, items, fresh) {
   var h = '<div class="r"><b>Màn hình bếp</b>' +
     '<label style="font-size:13px"><input type="checkbox" ' + (autoPrintOn() ? "checked" : "") +
     ' onchange="toggleAutoPrint(this.checked)" style="width:auto;vertical-align:middle"> Tự động in phiếu mới</label></div>';
-  h += "<p style='color:#888;font-size:13px;margin:6px 0'>Cập nhật trực tiếp (realtime) · có chuông khi món mới vào</p>";
+  h += "<p style='color:#888;font-size:13px;margin:6px 0'>Tự động làm mới mỗi 15 giây · có chuông khi món mới vào</p>";
   if (!ids.length) h += "<div class='card'>Bếp đang rảnh. Không có món chờ.</div>";
   ids.forEach(function (id) {
     var g = groups[id];

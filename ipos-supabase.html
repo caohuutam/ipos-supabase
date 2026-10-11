@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>iPOS Supabase (bản thử nghiệm)</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: #f4f1ea; color: #222; }
+  header { background: #8e1616; color: #fff; padding: 12px 16px; position: sticky; top: 0; z-index: 10; }
+  header h1 { margin: 0; font-size: 17px; }
+  header small { opacity: .8; font-size: 12px; }
+  main { padding: 12px 12px 84px; max-width: 720px; margin: 0 auto; }
+  nav#tabs { position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: #fff;
+             border-top: 1px solid #ddd; z-index: 10; }
+  nav#tabs button { flex: 1; border: 0; background: none; padding: 10px 4px 12px; font-size: 12px;
+                    color: #777; cursor: pointer; }
+  nav#tabs button.active { color: #8e1616; font-weight: 700; }
+  nav#tabs button .ic { font-size: 20px; display: block; }
+  .card { background: #fff; border-radius: 12px; padding: 12px; margin-bottom: 10px;
+          box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .table { border-radius: 12px; padding: 14px 8px; text-align: center; font-weight: 700;
+           border: 2px solid transparent; cursor: pointer; background: #fff; }
+  .table small { display: block; font-weight: 400; font-size: 11px; color: #666; margin-top: 4px; }
+  .t-TRONG { border-color: #2e9e5b; color: #2e9e5b; }
+  .t-DANG_PHUC_VU { border-color: #e07b00; background: #fff7e8; color: #b25f00; }
+  .btn { display: block; width: 100%; border: 0; border-radius: 10px; padding: 14px;
+         font-size: 16px; font-weight: 700; cursor: pointer; margin-top: 10px; }
+  .btn-primary { background: #8e1616; color: #fff; }
+  .btn-green { background: #2e9e5b; color: #fff; }
+  .btn-orange { background: #e07b00; color: #fff; }
+  .btn-ghost { background: #eee; color: #333; }
+  .btn:disabled { opacity: .5; }
+  .row { display: flex; justify-content: space-between; align-items: center; padding: 10px 2px;
+         border-bottom: 1px solid #f0ece2; }
+  .row:last-child { border-bottom: 0; }
+  .qty { display: flex; align-items: center; gap: 10px; }
+  .qty button { width: 34px; height: 34px; border-radius: 50%; border: 1px solid #ccc;
+                background: #fff; font-size: 18px; cursor: pointer; }
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 10px; }
+  .chips button { white-space: nowrap; border: 1px solid #ddd; background: #fff; border-radius: 20px;
+                  padding: 8px 14px; font-size: 14px; cursor: pointer; }
+  .chips button.active { background: #8e1616; color: #fff; border-color: #8e1616; }
+  .note { font-size: 12px; color: #b25f00; }
+  .kds-new { border-left: 5px solid #d33; }
+  .kds-doing { border-left: 5px solid #e07b00; }
+  .kds-actions { display: flex; gap: 8px; margin-top: 8px; }
+  .kds-actions button { flex: 1; padding: 10px; border-radius: 8px; border: 0; font-weight: 700; cursor: pointer; }
+  input, select { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 10px; font-size: 16px; }
+  .total { font-size: 22px; font-weight: 800; color: #8e1616; }
+  #pin-screen { max-width: 380px; margin: 60px auto; padding: 20px; text-align: center; }
+  .hidden { display: none !important; }
+  .err { color: #c00; font-size: 14px; min-height: 20px; }
+  .back { background: none; border: 0; color: #8e1616; font-size: 15px; font-weight: 700;
+          padding: 6px 0; cursor: pointer; }
+  .stat { text-align: center; }
+  .stat .v { font-size: 24px; font-weight: 800; color: #8e1616; }
+  .stat .l { font-size: 12px; color: #666; }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  /* ---- Hóa đơn in nhiệt 80mm ---- */
+  #print-area { display: none; }
+  @media print {
+    body > *:not(#print-area) { display: none !important; }
+    #print-area { display: block !important; }
+    @page { size: 80mm auto; margin: 2mm; }
+  }
+  .receipt { width: 72mm; margin: 0 auto; font-family: "Courier New", Courier, monospace;
+             font-size: 12px; color: #000; line-height: 1.45; }
+  .receipt h2 { text-align: center; margin: 0 0 2px; font-size: 17px; }
+  .receipt .c { text-align: center; }
+  .receipt .r { display: flex; justify-content: space-between; }
+  .receipt hr { border: none; border-top: 1px dashed #000; margin: 6px 0; }
+  .receipt .big { font-size: 15px; font-weight: bold; }
+  /* ---- Phiếu bếp ---- */
+  .kticket { width: 72mm; margin: 0 auto; font-family: "Courier New", Courier, monospace; color: #000; }
+  .kticket .c { text-align: center; }
+  .kticket .big { font-size: 18px; font-weight: bold; }
+  .kticket hr { border: none; border-top: 2px dashed #000; margin: 8px 0; }
+  .kticket .ki { font-size: 17px; font-weight: bold; margin-top: 8px;
+                 display: flex; justify-content: space-between; }
+  .kticket .kq { font-size: 22px; }
+  .kticket .kn { font-size: 14px; font-style: italic; }
+  .badge-new { background: #d33; color: #fff; font-size: 11px; padding: 2px 8px;
+               border-radius: 10px; font-weight: 700; }
+  .badge-doing { background: #e07b00; color: #fff; font-size: 11px; padding: 2px 8px;
+                 border-radius: 10px; font-weight: 700; }
+  .kds-fresh { border: 2px solid #d33 !important; animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { box-shadow: 0 0 14px rgba(221,51,51,.65); } }
+  .r { display: flex; justify-content: space-between; align-items: center; }
+</style>
+</head>
+<body>
+
+<div id="pin-screen">
+  <div class="card">
+    <h2 style="margin-top:0">iPOS Supabase</h2><p style='color:#888;font-size:12px'>Bản thử nghiệm song song</p>
+    <p style="color:#666;font-size:14px">Nhập mã của quán để bắt đầu ca làm việc (thử nghiệm: 123456)</p>
+    <input id="pin" type="password" inputmode="numeric" placeholder="Mã quán" autocomplete="off">
+    <div class="err" id="pin-err"></div>
+    <button class="btn btn-primary" onclick="login()">Vào làm</button>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+  <header>
+    <h1 id="shop-name">iPOS</h1>
+    <small id="clock"></small>
+  </header>
+  <main>
+    <section id="view-ban"></section>
+    <section id="view-bep" class="hidden"></section>
+    <section id="view-thungan" class="hidden"></section>
+    <section id="view-baocao" class="hidden"></section>
+    <section id="view-order" class="hidden"></section>
+  </main>
+  <nav id="tabs">
+    <button data-v="ban" class="active" onclick="go('ban')"><span class="ic">🪑</span>Bàn</button>
+    <button data-v="bep" onclick="go('bep')"><span class="ic">👨‍🍳</span>Bếp</button>
+    <button data-v="thungan" onclick="go('thungan')"><span class="ic">🧾</span>Thu ngân</button>
+    <button data-v="baocao" onclick="go('baocao')"><span class="ic">📊</span>Báo cáo</button>
+  </nav>
+</div>
+
+<div id="print-area"></div>
+
+<script>
+/* ============ CẤU HÌNH SUPABASE ============ */
+// Điền 2 dòng này sau khi tạo project (xem file HUONG-DAN-SUPABASE.md):
+var SUPA_URL = "https://xyzcompany.supabase.co";  // Project URL
+var SUPA_ANON = "eyJhbGciOiJ9.eyJ9.abc";           // anon public key
+var DEFAULT_PIN = "123456"; // mã quán bản thử nghiệm (đổi tùy ý)
+var TOKEN = localStorage.getItem("ipos_supabase_token") || "";
+var VAT = 8, SHOP = "iPOS";
+var CFG_ALL = {};
+var MENU = [], TABLES = [];
+var CART = {};       // ma_mon -> {sl, ghi_chu}
+var CUR_ORDER = null;
+var CUR_ORDER_DATA = null;
+var CUR_BILL = null, LAST_BILL = null;
+var CUR_CAT = "Tất cả";
+var supa = null;
+
+async function initSupa() {
+  if (supa) return supa;
+  if (!SUPA_URL || SUPA_URL.indexOf("xyzcompany") >= 0)
+    throw new Error("Chưa điền SUPA_URL và SUPA_ANON ở đầu file. Xem hướng dẫn.");
+  var mod = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm");
+  supa = mod.createClient(SUPA_URL, SUPA_ANON);
+  return supa;
+}
+
+/* ============ GỌI SUPABASE ============ */
+async function sb(q) { var r = await q; if (r.error) throw new Error(r.error.message); return r.data; }
+function needPin(body) { if (body.token !== DEFAULT_PIN) throw new Error("Sai mã quán. Mã thử nghiệm: " + DEFAULT_PIN); }
+function fmtDT(iso) {
+  if (!iso) return "";
+  var d = new Date(iso), p = function (n) { return String(n).padStart(2, "0"); };
+  return p(d.getDate()) + "/" + p(d.getMonth() + 1) + "/" + d.getFullYear() + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+}
+async function nextId(table, key, prefix) {
+  var rows = await sb(supa.from(table).select(key).like(key, prefix + "%").order(key, { ascending: false }).limit(1));
+  var n = 0;
+  if (rows.length) { var m = String(rows[0][key]).match(/(\d+)$/); if (m) n = parseInt(m[1], 10); }
+  return prefix + String(n + 1).padStart(3, "0");
+}
+async function apiGet(p) {
+  await initSupa();
+  switch (p.api) {
+    case "config": {
+      var rows = await sb(supa.from("cai_dat").select("khoa,gia_tri"));
+      var c = {}; rows.forEach(function (r) { c[r.khoa] = r.gia_tri; });
+      return { ten_nha_hang: c.ten_nha_hang || "Nhà hàng", dia_chi: c.dia_chi || "", sdt: c.sdt || "",
+        vat: +(c.vat_mac_dinh) || 0, qr_bat: c.qr_bat || "TAT",
+        qr_ngan_hang: c.qr_ngan_hang || "", qr_so_tk: c.qr_so_tk || "", qr_chu_tk: c.qr_chu_tk || "" };
+    }
+    case "menu":
+      return sb(supa.from("mon_an").select("*").eq("trang_thai", "DANG_BAN").order("ma_mon"));
+    case "tables":
+      return sb(supa.from("ban").select("*").order("ma_ban"));
+    case "openOrders": {
+      var oo = await sb(supa.from("don_hang").select("ma_don,ma_ban,ten_ban,gio_vao,tong_tien").eq("trang_thai", "DANG_PHUC_VU").order("gio_vao"));
+      return oo.map(function (r) { return { ma_don: r.ma_don, ma_ban: r.ma_ban, ten_ban: r.ten_ban, gio_vao: fmtDT(r.gio_vao), tong_tien: +r.tong_tien || 0 }; });
+    }
+    case "order": {
+      var dh = await sb(supa.from("don_hang").select("*").eq("ma_don", p.ma_don).limit(1));
+      if (!dh.length) throw new Error("Không tìm thấy đơn " + p.ma_don);
+      var d = dh[0];
+      var items = await sb(supa.from("chi_tiet_don").select("*").eq("ma_don", p.ma_don).order("id"));
+      return { ma_don: d.ma_don, ma_ban: d.ma_ban, ten_ban: d.ten_ban, gio_vao: fmtDT(d.gio_vao),
+        trang_thai: d.trang_thai, tong_tien: +d.tong_tien || 0, giam_gia: +d.giam_gia || 0, ghi_chu: d.ghi_chu,
+        items: items.map(function (x) { return { ma_mon: x.ma_mon, ten_mon: x.ten_mon, so_luong: +x.so_luong || 0,
+          don_gia: +x.don_gia || 0, thanh_tien: +x.thanh_tien || 0, ghi_chu: x.ghi_chu, trang_thai_bep: x.trang_thai_bep }; }) };
+    }
+    case "kitchen": {
+      var kr = await sb(supa.from("chi_tiet_don").select("*").in("trang_thai_bep", ["CHO_LAM", "DANG_LAM"]).order("gio_goi"));
+      var dhs = await sb(supa.from("don_hang").select("ma_don,ten_ban").eq("trang_thai", "DANG_PHUC_VU"));
+      var tb = {}; dhs.forEach(function (x) { tb[x.ma_don] = x.ten_ban; });
+      return kr.map(function (x) { return { ma_don: x.ma_don, ten_ban: tb[x.ma_don] || "", ma_mon: x.ma_mon,
+        ten_mon: x.ten_mon, so_luong: +x.so_luong || 0, ghi_chu: x.ghi_chu,
+        trang_thai_bep: x.trang_thai_bep, gio_goi: fmtDT(x.gio_goi) }; });
+    }
+    case "report": return sbReport(p.che_do, p.gia_tri);
+    default: throw new Error("API không hỗ trợ: " + p.api);
+  }
+}
+async function apiPost(body) {
+  await initSupa();
+  needPin(body);
+  switch (body.action) {
+    case "createOrder": {
+      var b = await sb(supa.from("ban").select("*").eq("ma_ban", body.ma_ban).limit(1));
+      if (!b.length) throw new Error("Không tìm thấy bàn " + body.ma_ban);
+      if (b[0].trang_thai !== "TRONG") throw new Error("Bàn " + b[0].ten_ban + " đang bận");
+      var maDon = await nextId("don_hang", "ma_don", "DH");
+      var cfg = await apiGet({ api: "config" });
+      await sb(supa.from("don_hang").insert({ ma_don: maDon, ma_ban: body.ma_ban, ten_ban: b[0].ten_ban,
+        gio_vao: new Date().toISOString(), trang_thai: "DANG_PHUC_VU", tong_tien: 0, giam_gia: 0,
+        vat: cfg.vat, phai_thu: 0, nhan_vien: body.nhan_vien || "", ghi_chu: body.ghi_chu || "" }));
+      await sb(supa.from("ban").update({ trang_thai: "DANG_PHUC_VU" }).eq("ma_ban", body.ma_ban));
+      return { ok: true, ma_don: maDon };
+    }
+    case "addItems": {
+      var dh = await sb(supa.from("don_hang").select("ma_don,trang_thai").eq("ma_don", body.ma_don).limit(1));
+      if (!dh.length || dh[0].trang_thai !== "DANG_PHUC_VU") throw new Error("Đơn không còn phục vụ");
+      var menu = await sb(supa.from("mon_an").select("ma_mon,ten_mon,don_gia"));
+      var mm = {}; menu.forEach(function (m) { mm[m.ma_mon] = m; });
+      var t = new Date().toISOString(), rows = [];
+      (body.items || []).forEach(function (it) {
+        var m = mm[it.ma_mon];
+        if (!m) throw new Error("Món không tồn tại: " + it.ma_mon);
+        var sl = +it.so_luong || 0; if (sl <= 0) return;
+        var dg = +m.don_gia || 0;
+        rows.push({ ma_don: body.ma_don, ma_mon: m.ma_mon, ten_mon: m.ten_mon, so_luong: sl,
+          don_gia: dg, thanh_tien: sl * dg, ghi_chu: it.ghi_chu || "", trang_thai_bep: "CHO_LAM", gio_goi: t });
+      });
+      if (rows.length) await sb(supa.from("chi_tiet_don").insert(rows));
+      await recalc(body.ma_don);
+      return { ok: true };
+    }
+    case "setKitchen": {
+      var ks = await sb(supa.from("chi_tiet_don").select("id").eq("ma_don", body.ma_don).eq("ma_mon", body.ma_mon)
+        .in("trang_thai_bep", ["CHO_LAM", "DANG_LAM"]).order("id").limit(1));
+      if (!ks.length) throw new Error("Không tìm thấy món trong bếp");
+      await sb(supa.from("chi_tiet_don").update({ trang_thai_bep: body.trang_thai }).eq("id", ks[0].id));
+      return { ok: true };
+    }
+    case "checkout": {
+      var d2 = await sb(supa.from("don_hang").select("*").eq("ma_don", body.ma_don).limit(1));
+      if (!d2.length || d2[0].trang_thai !== "DANG_PHUC_VU") throw new Error("Đơn không còn phục vụ");
+      var tong = await recalc(body.ma_don);
+      var giam = +body.giam_gia || 0;
+      var cfg2 = await apiGet({ api: "config" });
+      var phaiThu = Math.round((tong - giam) * (1 + cfg2.vat / 100));
+      var maTT = await nextId("thanh_toan", "ma_tt", "TT");
+      await sb(supa.from("thanh_toan").insert({ ma_tt: maTT, ma_don: body.ma_don,
+        hinh_thuc: body.hinh_thuc || "TIEN_MAT", so_tien: phaiThu,
+        thoi_gian: new Date().toISOString(), nhan_vien: body.nhan_vien || "" }));
+      await sb(supa.from("don_hang").update({ gio_ra: new Date().toISOString(), trang_thai: "DA_THANH_TOAN",
+        giam_gia: giam, phai_thu: phaiThu }).eq("ma_don", body.ma_don));
+      await sb(supa.from("ban").update({ trang_thai: "TRONG" }).eq("ma_ban", d2[0].ma_ban));
+      return { ok: true, ma_tt: maTT, phai_thu: phaiThu };
+    }
+    case "saveConfig": {
+      var vals = body.cau_hinh || {}, keys = Object.keys(vals);
+      for (var i = 0; i < keys.length; i++)
+        await sb(supa.from("cai_dat").upsert({ khoa: keys[i], gia_tri: String(vals[keys[i]]) }, { onConflict: "khoa" }));
+      return { ok: true };
+    }
+    default: throw new Error("Action không hỗ trợ: " + body.action);
+  }
+}
+async function recalc(maDon) {
+  var rows = await sb(supa.from("chi_tiet_don").select("thanh_tien").eq("ma_don", maDon));
+  var tong = 0;
+  rows.forEach(function (r) { tong += +r.thanh_tien || 0; });
+  await sb(supa.from("don_hang").update({ tong_tien: tong }).eq("ma_don", maDon));
+  return tong;
+}
+function shiftDate(ymd, days) {
+  var d = new Date(ymd + "T00:00:00+07:00");
+  d.setDate(d.getDate() + days);
+  var p = function (n) { return String(n).padStart(2, "0"); };
+  return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+}
+async function sbReport(che_do, gia_tri) {
+  var from, to;
+  if (che_do === "ngay") { from = gia_tri + "T00:00:00+07:00"; to = shiftDate(gia_tri, 1) + "T00:00:00+07:00"; }
+  else if (che_do === "thang") {
+    var m = +gia_tri.slice(5, 7), y = gia_tri.slice(0, 4);
+    from = gia_tri + "-01T00:00:00+07:00";
+    to = (m === 12 ? (+y + 1) + "-01" : y + "-" + String(m + 1).padStart(2, "0")) + "-01T00:00:00+07:00";
+  } else { var yy = +gia_tri; from = yy + "-01-01T00:00:00+07:00"; to = (yy + 1) + "-01-01T00:00:00+07:00"; }
+  var tt = await sb(supa.from("thanh_toan").select("ma_don,so_tien").gte("thoi_gian", from).lt("thoi_gian", to));
+  var ct = await sb(supa.from("chi_tiet_don").select("ma_mon,ten_mon,so_luong,thanh_tien").gte("gio_goi", from).lt("gio_goi", to));
+  var doanhThu = 0, dons = {};
+  tt.forEach(function (r) { doanhThu += (+r.so_tien || 0); dons[r.ma_don] = 1; });
+  var soMon = 0, byMon = {};
+  ct.forEach(function (r) {
+    var sl = +r.so_luong || 0; soMon += sl;
+    var k = r.ma_mon;
+    if (!byMon[k]) byMon[k] = { ma_mon: r.ma_mon, ten_mon: r.ten_mon, so_luong: 0, doanh_thu: 0 };
+    byMon[k].so_luong += sl; byMon[k].doanh_thu += (+r.thanh_tien || 0);
+  });
+  var top = Object.keys(byMon).map(function (k) { return byMon[k]; })
+    .sort(function (a, b) { return b.so_luong - a.so_luong; }).slice(0, 10);
+  return { doanh_thu: doanhThu, so_don: Object.keys(dons).length, so_mon: soMon, top_mon: top };
+}
+
+/* ============ ĐĂNG NHẬP ============ */
+function login() {
+  var v = document.getElementById("pin").value.trim();
+  if (!v) return;
+  TOKEN = v;
+  localStorage.setItem("ipos_token", v);
+  boot();
+}
+function logout() {
+  TOKEN = ""; localStorage.removeItem("ipos_token");
+  document.getElementById("app").classList.add("hidden");
+  document.getElementById("pin-screen").classList.remove("hidden");
+}
+function boot() {
+  document.getElementById("pin-screen").classList.add("hidden");
+  document.getElementById("app").classList.remove("hidden");
+  apiGet({api:"config"}).then(function (c) {
+    CFG_ALL = c;
+    SHOP = c.ten_nha_hang; VAT = Number(c.vat) || 0;
+    document.getElementById("shop-name").textContent = SHOP;
+  }).catch(function () {});
+  tick(); setInterval(tick, 30000);
+  go("ban");
+}
+function tick() {
+  var d = new Date();
+  document.getElementById("clock").textContent =
+    d.toLocaleDateString("vi-VN") + " " + d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+}
+if (TOKEN) boot();
+
+/* ============ ĐIỀU HƯỚNG ============ */
+function go(v) {
+  ["ban", "bep", "thungan", "baocao", "order"].forEach(function (x) {
+    document.getElementById("view-" + x).classList.add("hidden");
+  });
+  document.querySelectorAll("#tabs button").forEach(function (b) {
+    b.classList.toggle("active", b.dataset.v === v);
+  });
+  document.getElementById("view-" + v).classList.remove("hidden");
+  if (typeof BEP_CHANNEL !== "undefined" && BEP_CHANNEL && supa) { supa.removeChannel(BEP_CHANNEL); BEP_CHANNEL = null; }
+  if (v === "ban") renderTables();
+  if (v === "bep") { renderKitchen(true); subKitchen(); }
+  if (v === "thungan") renderCashier();
+  if (v === "baocao") renderReport();
+}
+
+/* ============ BÀN ============ */
+function renderTables() {
+  var el = document.getElementById("view-ban");
+  el.innerHTML = "<p>Đang tải...</p>";
+  Promise.all([apiGet({api:"tables"}), apiGet({api:"openOrders"})]).then(function (rs) {
+    TABLES = rs[0];
+    var openByTable = {};
+    rs[1].forEach(function (o) { openByTable[o.ma_ban] = o.ma_don; });
+    var groups = {};
+    TABLES.forEach(function (t) { (groups[t.khu_vuc] = groups[t.khu_vuc] || []).push(t); });
+    var h = "";
+    Object.keys(groups).forEach(function (kv) {
+      h += "<h3 style='margin:14px 4px 8px'>" + esc(kv) + "</h3><div class='grid'>";
+      groups[kv].forEach(function (t) {
+        var st = t.trang_thai, label = st === "TRONG" ? "Trống" : "Đang phục vụ";
+        h += "<div class='table t-" + st + "' onclick='tapTable(\"" + t.ma_ban + "\",\"" + st + "\")'>" +
+             esc(t.ten_ban) + "<small>" + t.so_cho + " chỗ · " + label + "</small></div>";
+      });
+      h += "</div>";
+    });
+    el.innerHTML = h;
+    el._open = openByTable;
+  }).catch(function (e) { el.innerHTML = "<p class='err'>" + esc(e.message) + "</p>"; });
+}
+function tapTable(ma_ban, st) {
+  var open = document.getElementById("view-ban")._open || {};
+  if (st === "TRONG") {
+    if (!confirm("Mở order mới cho bàn này?")) return;
+    apiPost({ action: "createOrder", ma_ban: ma_ban })
+      .then(function (j) { openOrder(j.ma_don); })
+      .catch(function (e) { toast(e.message); });
+  } else if (open[ma_ban]) {
+    openOrder(open[ma_ban]);
+  } else {
+    renderTables();
+  }
+}
+
+/* ============ ORDER ============ */
+function openOrder(ma_don) {
+  CUR_ORDER = ma_don; CART = {};
+  go("order");
+  var el = document.getElementById("view-order");
+  el.innerHTML = "<p>Đang tải...</p>";
+  Promise.all([apiGet({api:"order", ma_don: ma_don}), apiGet({api:"menu"})]).then(function (rs) {
+    var o = rs[0]; MENU = rs[1];
+    renderOrder(o);
+  }).catch(function (e) { el.innerHTML = "<p class='err'>" + esc(e.message) + "</p>"; });
+}
+function renderOrder(o) {
+  CUR_ORDER_DATA = o;
+  var el = document.getElementById("view-order");
+  var cats = ["Tất cả"];
+  MENU.forEach(function (m) { if (cats.indexOf(m.danh_muc) < 0) cats.push(m.danh_muc); });
+  var h = "<button class='back' onclick='go(\"ban\")'>← Bàn</button>";
+  h += "<div class='card'><b>" + esc(o.ten_ban) + "</b> · Đơn " + esc(o.ma_don) +
+       "<br><small style='color:#666'>Vào lúc " + esc(o.gio_vao) + "</small></div>";
+  h += "<div class='card'><b>Món đã gọi</b>";
+  if (!o.items.length) h += "<p style='color:#888'>Chưa có món nào.</p>";
+  o.items.forEach(function (it) {
+    var st = it.trang_thai_bep === "DA_XONG" ? " · xong" : it.trang_thai_bep === "DANG_LAM" ? " · đang làm" : "";
+    h += "<div class='row'><div>" + esc(it.ten_mon) + " × " + it.so_luong +
+         (it.ghi_chu ? "<div class='note'>" + esc(it.ghi_chu) + "</div>" : "") +
+         "<div style='font-size:12px;color:#888'>" + esc(it.trang_thai_bep || "") + st + "</div></div>" +
+         "<b>" + fmt(it.thanh_tien) + "</b></div>";
+  });
+  h += "<div class='row'><b>Tạm tính</b><span class='total'>" + fmt(o.tong_tien) + "</span></div></div>";
+  h += "<div class='card'><b>Thêm món</b><div class='chips'>";
+  cats.forEach(function (c) {
+    h += "<button class='" + (c === CUR_CAT ? "active" : "") + "' onclick='setCat(\"" + esc(c) + "\")'>" + esc(c) + "</button>";
+  });
+  h += "</div><div id='menu-list'></div>";
+  h += "<button class='btn btn-orange' id='btn-send' onclick='sendToKitchen()'>Gửi bếp</button></div>";
+  el.innerHTML = h;
+  renderMenuList();
+}
+function setCat(c) { CUR_CAT = c; if (CUR_ORDER_DATA) renderOrder(CUR_ORDER_DATA); }
+function renderMenuList() {
+  var h = "";
+  MENU.filter(function (m) { return CUR_CAT === "Tất cả" || m.danh_muc === CUR_CAT; }).forEach(function (m) {
+    var c = CART[m.ma_mon] || { sl: 0, ghi_chu: "" };
+    h += "<div class='row'><div><b>" + esc(m.ten_mon) + "</b><br><small style='color:#888'>" +
+         fmt(m.don_gia) + (c.ghi_chu ? " · <span class='note'>" + esc(c.ghi_chu) + "</span>" : "") + "</small></div>" +
+         "<div class='qty'><button onclick='qNote(\"" + m.ma_mon + "\")'>✎</button>" +
+         "<button onclick='qChange(\"" + m.ma_mon + "\",-1)'>−</button><b>" + c.sl + "</b>" +
+         "<button onclick='qChange(\"" + m.ma_mon + "\",1)'>+</button></div></div>";
+  });
+  document.getElementById("menu-list").innerHTML = h || "<p style='color:#888'>Hết món.</p>";
+}
+function qChange(ma, d) {
+  var c = CART[ma] || (CART[ma] = { sl: 0, ghi_chu: "" });
+  c.sl = Math.max(0, c.sl + d);
+  if (!c.sl) delete CART[ma];
+  renderMenuList();
+}
+function qNote(ma) {
+  var c = CART[ma] || (CART[ma] = { sl: 0, ghi_chu: "" });
+  var v = prompt("Ghi chú món (vd: ít cay, không hành):", c.ghi_chu || "");
+  if (v !== null) { c.ghi_chu = v.trim(); if (c.sl === 0) c.sl = 1; renderMenuList(); }
+}
+function sendToKitchen() {
+  var items = Object.keys(CART).map(function (ma) {
+    return { ma_mon: ma, so_luong: CART[ma].sl, ghi_chu: CART[ma].ghi_chu };
+  }).filter(function (x) { return x.so_luong > 0; });
+  if (!items.length) { toast("Chưa chọn món nào"); return; }
+  var b = document.getElementById("btn-send"); b.disabled = true; b.textContent = "Đang gửi...";
+  apiPost({ action: "addItems", ma_don: CUR_ORDER, items: items })
+    .then(function () { openOrder(CUR_ORDER); })
+    .catch(function (e) { toast(e.message); b.disabled = false; b.textContent = "Gửi bếp"; });
+}
+/* ============ BẾP (máy in phiếu bếp) ============ */
+var BEP_CHANNEL = null;
+var SEEN_KEY = "ipos_sb_kitchen_seen";
+var AUTO_KEY = "ipos_sb_kitchen_autoprint";
+
+function getSeen() { try { return JSON.parse(localStorage.getItem(SEEN_KEY) || "{}"); } catch (e) { return {}; } }
+function setSeen(o) { localStorage.setItem(SEEN_KEY, JSON.stringify(o)); }
+function autoPrintOn() { return localStorage.getItem(AUTO_KEY) === "1"; }
+function toggleAutoPrint(on) {
+  localStorage.setItem(AUTO_KEY, on ? "1" : "0");
+  if (on) toast("Đã bật tự động in. Món mới vào sẽ tự mở hộp thoại in.");
+}
+function itemKey(it) { return it.ma_don + "|" + it.ma_mon + "|" + it.gio_goi + "|" + it.so_luong; }
+
+function beep() {
+  try {
+    var ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.28].forEach(function (t) {
+      var o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.frequency.value = 880; o.type = "sine";
+      var s = ctx.currentTime + t;
+      g.gain.setValueAtTime(0.001, s);
+      g.gain.exponentialRampToValueAtTime(0.5, s + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, s + 0.22);
+      o.start(s); o.stop(s + 0.24);
+    });
+  } catch (e) {}
+}
+
+async function subKitchen() {
+  await initSupa();
+  if (BEP_CHANNEL) return;
+  BEP_CHANNEL = supa.channel("bep-live")
+    .on("postgres_changes", { event: "*", schema: "public", table: "chi_tiet_don" },
+      function () { renderKitchen(false); })
+    .subscribe();
+}
+function renderKitchen(first) {
+  var el = document.getElementById("view-bep");
+  if (first) el.innerHTML = "<p>Đang tải...</p>";
+  apiGet({api:"kitchen"}).then(function (items) {
+    var seen = getSeen(), fresh = [];
+    items.forEach(function (it) {
+      if (it.trang_thai_bep === "CHO_LAM" && !seen[itemKey(it)]) fresh.push(it);
+    });
+    items.forEach(function (it) { seen[itemKey(it)] = 1; });
+    var ks = Object.keys(seen);
+    if (ks.length > 500) { var ns = {}; ks.slice(-300).forEach(function (k) { ns[k] = 1; }); seen = ns; }
+    setSeen(seen);
+    if (fresh.length && !first) {
+      beep();
+      if (autoPrintOn()) { printNewArrivals(fresh); return; }
+    }
+    renderKitchenGroups(el, items, fresh);
+  }).catch(function (e) {
+    if (first) el.innerHTML = "<p class='err'>" + esc(e.message) + "</p>";
+  });
+}
+
+function renderKitchenGroups(el, items, fresh) {
+  var freshIds = {};
+  (fresh || []).forEach(function (it) { freshIds[it.ma_don] = 1; });
+  var groups = {};
+  items.forEach(function (it) { (groups[it.ma_don] = groups[it.ma_don] || []).push(it); });
+  var ids = Object.keys(groups);
+  var h = '<div class="r"><b>Màn hình bếp</b>' +
+    '<label style="font-size:13px"><input type="checkbox" ' + (autoPrintOn() ? "checked" : "") +
+    ' onchange="toggleAutoPrint(this.checked)" style="width:auto;vertical-align:middle"> Tự động in phiếu mới</label></div>';
+  h += "<p style='color:#888;font-size:13px;margin:6px 0'>Cập nhật trực tiếp (realtime) · có chuông khi món mới vào</p>";
+  if (!ids.length) h += "<div class='card'>Bếp đang rảnh. Không có món chờ.</div>";
+  ids.forEach(function (id) {
+    var g = groups[id];
+    var hasNew = g.some(function (it) { return it.trang_thai_bep === "CHO_LAM"; });
+    h += "<div class='card" + (freshIds[id] ? " kds-fresh" : "") + "'>";
+    h += "<div class='r'><b style='font-size:19px'>" + esc(g[0].ten_ban) + "</b>" +
+         "<small style='color:#888'>" + esc(id) + " · " + esc(g[0].gio_goi) + "</small></div>";
+    g.forEach(function (it) {
+      var badge = it.trang_thai_bep === "CHO_LAM"
+        ? "<span class='badge-new'>MỚI</span>" : "<span class='badge-doing'>ĐANG LÀM</span>";
+      h += "<div class='row'><div>" + esc(it.ten_mon) + " × <b>" + it.so_luong + "</b> " + badge +
+           (it.ghi_chu ? "<div class='note'>Ghi chú: " + esc(it.ghi_chu) + "</div>" : "") + "</div>";
+      if (it.trang_thai_bep === "DANG_LAM") {
+        h += "<button style='padding:8px 16px;border-radius:8px;border:0;font-weight:700;background:#2e9e5b;color:#fff' " +
+             "onclick='kSet(\"" + it.ma_don + "\",\"" + it.ma_mon + "\",\"DA_XONG\")'>Xong</button>";
+      }
+      h += "</div>";
+    });
+    if (hasNew) h += "<button class='btn btn-orange' onclick='printKitchenTicket(\"" + id + "\", true)'>In phiếu bếp</button>";
+    h += "<button class='btn btn-ghost' onclick='printKitchenTicket(\"" + id + "\", false)'>In lại phiếu</button>";
+    h += "</div>";
+  });
+  el.innerHTML = h;
+}
+
+function kSet(ma_don, ma_mon, st) {
+  apiPost({ action: "setKitchen", ma_don: ma_don, ma_mon: ma_mon, trang_thai: st })
+    .then(function () { renderKitchen(false); })
+    .catch(function (e) { toast(e.message); });
+}
+
+// In phiếu bếp của 1 đơn. mark=true: đồng thời chuyển món MỚI -> ĐANG LÀM
+function printKitchenTicket(ma_don, mark) {
+  apiGet({api:"kitchen"}).then(function (items) {
+    var g = items.filter(function (it) { return it.ma_don === ma_don; });
+    if (!g.length) { toast("Không còn món nào cần in"); return; }
+    doPrintKitchen(g);
+    if (mark === false) { renderKitchen(false); return; }
+    var news = g.filter(function (it) { return it.trang_thai_bep === "CHO_LAM"; });
+    (function next(i) {
+      if (i >= news.length) { renderKitchen(false); return; }
+      var it = news[i];
+      apiPost({ action: "setKitchen", ma_don: it.ma_don, ma_mon: it.ma_mon, trang_thai: "DANG_LAM" })
+        .then(function () { next(i + 1); }, function () { next(i + 1); });
+    })(0);
+  }).catch(function (e) { toast(e.message); });
+}
+
+// Tự động in các món vừa vào (khi bật chế độ tự động in)
+function printNewArrivals(fresh) {
+  var byOrder = {};
+  fresh.forEach(function (it) { (byOrder[it.ma_don] = byOrder[it.ma_don] || []).push(it); });
+  var ids = Object.keys(byOrder);
+  (function next(i) {
+    if (i >= ids.length) { renderKitchen(false); return; }
+    var g = byOrder[ids[i]];
+    doPrintKitchen(g);
+    var k = 0;
+    (function nx() {
+      if (k >= g.length) { next(i + 1); return; }
+      var it = g[k++];
+      apiPost({ action: "setKitchen", ma_don: it.ma_don, ma_mon: it.ma_mon, trang_thai: "DANG_LAM" })
+        .then(nx, nx);
+    })();
+  })(0);
+}
+
+function doPrintKitchen(g) {
+  var h = '<div class="kticket">';
+  h += '<div class="c big">PHIẾU BẾP</div>';
+  h += '<div class="c" style="font-size:28px;font-weight:800">' + esc(g[0].ten_ban) + "</div>";
+  h += '<div class="c">' + esc(g[0].ma_don) + " · " + esc(g[0].gio_goi) + "</div><hr>";
+  g.forEach(function (it) {
+    h += '<div class="ki"><span>' + esc(it.ten_mon) + '</span><span class="kq">× ' + it.so_luong + "</span></div>";
+    if (it.ghi_chu) h += '<div class="kn">* ' + esc(it.ghi_chu) + "</div>";
+  });
+  h += "<hr>" + '<div class="c">-- hết --</div></div>';
+  document.getElementById("print-area").innerHTML = h;
+  window.print();
+}
+
+
+/* ============ THU NGÂN ============ */
+function renderCashier() {
+  var el = document.getElementById("view-thungan");
+  el.innerHTML = "<p>Đang tải...</p>";
+  apiGet({api:"openOrders"}).then(function (orders) {
+    if (!orders.length) { el.innerHTML = "<div class='card'>Không có đơn nào đang phục vụ.</div>"; return; }
+    var h = "";
+    orders.forEach(function (o) {
+      h += "<div class='card'><div class='row'><div><b>" + esc(o.ten_ban) + "</b><br><small style='color:#888'>" +
+           esc(o.ma_don) + " · " + esc(o.gio_vao) + "</small></div>" +
+           "<button class='btn btn-primary' style='width:auto;margin:0;padding:10px 18px' " +
+           "onclick='openBill(\"" + o.ma_don + "\")'>Tính tiền</button></div></div>";
+    });
+    el.innerHTML = h;
+  }).catch(function (e) { el.innerHTML = "<p class='err'>" + esc(e.message) + "</p>"; });
+}
+function openBill(ma_don) {
+  var el = document.getElementById("view-thungan");
+  el.innerHTML = "<p>Đang tải...</p>";
+  apiGet({api:"order", ma_don: ma_don}).then(function (o) {
+    CUR_BILL = o;
+    var h = "<button class='back' onclick='renderCashier()'>← Đơn đang phục vụ</button>";
+    h += "<div class='card'><h3 style='margin:0 0 4px'>Hóa đơn · " + esc(o.ten_ban) + "</h3>" +
+         "<small style='color:#888'>" + esc(o.ma_don) + " · vào " + esc(o.gio_vao) + "</small>";
+    o.items.forEach(function (it) {
+      h += "<div class='row'><div>" + esc(it.ten_mon) + " × " + it.so_luong + "</div><b>" + fmt(it.thanh_tien) + "</b></div>";
+    });
+    h += "<div class='row'><span>Tạm tính</span><b>" + fmt(o.tong_tien) + "</b></div>";
+    h += "<div class='row'><span>Giảm giá (₫)</span><input id='disc' type='number' inputmode='numeric' " +
+         "value='0' style='width:130px' oninput='updBill(" + o.tong_tien + ")'></div>";
+    h += "<div class='row'><span>VAT (" + VAT + "%)</span><b id='vat-v'>" + fmt(o.tong_tien * VAT / 100) + "</b></div>";
+    h += "<div class='row'><span>Khách trả</span><span class='total' id='pay-v'>" +
+         fmt(Math.round(o.tong_tien * (1 + VAT / 100))) + "</span></div>";
+    h += "<div class='row'><span>Hình thức</span><select id='pm' style='width:150px'>" +
+         "<option value='TIEN_MAT'>Tiền mặt</option><option value='CHUYEN_KHOAN'>Chuyển khoản</option></select></div>";
+    h += "<button class='btn btn-ghost' onclick='printPreview()'>In hóa đơn</button>";
+    h += "<button class='btn btn-green' onclick='doCheckout(\"" + o.ma_don + "\"," + o.tong_tien + ")'>Hoàn tất thanh toán</button></div>";
+    el.innerHTML = h;
+  }).catch(function (e) { el.innerHTML = "<p class='err'>" + esc(e.message) + "</p>"; });
+}
+function updBill(tong) {
+  var d = Number(document.getElementById("disc").value) || 0;
+  var pay = Math.round((tong - d) * (1 + VAT / 100));
+  document.getElementById("vat-v").textContent = fmt(Math.round((tong - d) * VAT / 100));
+  document.getElementById("pay-v").textContent = fmt(pay);
+}
+function doCheckout(ma_don, tong) {
+  var d = Number(document.getElementById("disc").value) || 0;
+  var pm = document.getElementById("pm").value;
+  var pay = Math.round((tong - d) * (1 + VAT / 100));
+  if (!confirm("Xác nhận thu " + fmt(pay) + "?")) return;
+  apiPost({ action: "checkout", ma_don: ma_don, giam_gia: d, hinh_thuc: pm })
+    .then(function (j) {
+      var o = CUR_BILL;
+      LAST_BILL = { ma_don: o.ma_don, ten_ban: o.ten_ban, gio_vao: o.gio_vao, items: o.items,
+                    tong: o.tong_tien, giam: d, vat: VAT, pay: j.phai_thu, hinh_thuc: pm, ma_tt: j.ma_tt };
+      var el = document.getElementById("view-thungan");
+      el.innerHTML = "<div class='card' style='text-align:center'>" +
+        "<h3 style='color:#2e9e5b;margin:0 0 8px'>Đã thanh toán</h3>" +
+        "<div class='total'>" + fmt(j.phai_thu) + "</div>" +
+        "<p style='color:#888'>" + esc(o.ten_ban) + " · " + esc(j.ma_tt) + "</p>" +
+        "<button class='btn btn-primary' onclick='doPrint(LAST_BILL)'>In hóa đơn</button>" +
+        "<button class='btn btn-ghost' onclick='go(\"ban\")'>Về màn hình bàn</button></div>";
+    })
+    .catch(function (e) { toast(e.message); });
+}
+
+/* ============ IN HÓA ĐƠN (khổ 80mm) ============ */
+function billSnapshot() {
+  var o = CUR_BILL;
+  var d = Number(document.getElementById("disc").value) || 0;
+  var pm = document.getElementById("pm").value;
+  return { ma_don: o.ma_don, ten_ban: o.ten_ban, gio_vao: o.gio_vao, items: o.items,
+           tong: o.tong_tien, giam: d, vat: VAT,
+           pay: Math.round((o.tong_tien - d) * (1 + VAT / 100)),
+           hinh_thuc: pm, ma_tt: "" };
+}
+function printPreview() { doPrint(billSnapshot()); }
+function doPrint(b) {
+  var cfg = CFG_ALL || {};
+  var h = '<div class="receipt">';
+  h += "<h2>" + esc(cfg.ten_nha_hang || SHOP) + "</h2>";
+  h += '<div class="c">' + esc(cfg.dia_chi || "") + (cfg.sdt ? "<br>ĐT: " + esc(cfg.sdt) : "") + "</div><hr>";
+  h += '<div class="c big">HÓA ĐƠN THANH TOÁN</div>';
+  h += '<div class="r"><span>Mã: ' + esc(b.ma_don) + "</span><span>" + esc(b.ten_ban) + "</span></div>";
+  h += "<div>Vào: " + esc(b.gio_vao) + "</div>";
+  if (b.ma_tt) h += "<div>Mã TT: " + esc(b.ma_tt) + "</div>";
+  h += "<hr>";
+  b.items.forEach(function (it) {
+    h += "<div>" + esc(it.ten_mon) + " × " + it.so_luong + "</div>";
+    h += '<div class="r"><span>' + fmt(it.don_gia) + "</span><b>" + fmt(it.thanh_tien) + "</b></div>";
+  });
+  h += "<hr>";
+  h += '<div class="r"><span>Tạm tính</span><span>' + fmt(b.tong) + "</span></div>";
+  if (b.giam > 0) h += '<div class="r"><span>Giảm giá</span><span>-' + fmt(b.giam) + "</span></div>";
+  h += '<div class="r"><span>VAT (' + b.vat + "%)</span><span>" +
+       fmt(Math.round((b.tong - b.giam) * b.vat / 100)) + "</span></div>";
+  h += '<div class="r big"><span>TỔNG CỘNG</span><span>' + fmt(b.pay) + "</span></div>";
+  h += '<div class="r"><span>Thanh toán</span><span>' +
+       (b.hinh_thuc === "CHUYEN_KHOAN" ? "Chuyển khoản" : "Tiền mặt") + "</span></div>";
+  h += "<hr>";
+  var qr = qrURL(b);
+  if (qr) h += '<div class="c"><img src="' + qr + '" style="width:150px;height:150px">' +
+               '<div style="font-size:11px">Quét mã để thanh toán</div></div><hr>';
+  h += '<div class="c">Cảm ơn quý khách!<br>Hẹn gặp lại</div>';
+  h += "</div>";
+  document.getElementById("print-area").innerHTML = h;
+  window.print();
+}
+
+/* ============ BÁO CÁO (ngày / tháng / năm) + CÀI ĐẶT QR ============ */
+var RP_MODE = "today";
+function todayStr() {
+  var d = new Date();
+  return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
+}
+function setRpMode(m) { RP_MODE = m; renderReport(); }
+function renderReport() {
+  var el = document.getElementById("view-baocao");
+  var modes = [["today", "Hôm nay"], ["day", "Ngày"], ["month", "Tháng"], ["year", "Năm"]];
+  var h = "<div class='chips'>";
+  modes.forEach(function (m) {
+    h += "<button class='" + (RP_MODE === m[0] ? "active" : "") + "' onclick='setRpMode(\"" + m[0] + "\")'>" + m[1] + "</button>";
+  });
+  h += "</div><div class='card' id='rp-filter'></div><div id='rp-result'></div>";
+  h += qrSettingsHTML();
+  el.innerHTML = h;
+  renderRpFilter();
+}
+function renderRpFilter() {
+  var f = document.getElementById("rp-filter"), h = "";
+  if (RP_MODE === "day") h = '<input type="date" id="rp-val" value="' + todayStr() + '">';
+  else if (RP_MODE === "month") h = '<input type="month" id="rp-val" value="' + todayStr().slice(0, 7) + '">';
+  else if (RP_MODE === "year") h = '<input type="number" id="rp-val" value="' + todayStr().slice(0, 4) + '" min="2020" max="2100">';
+  else h = "<b>Hôm nay</b> <small style='color:#888'>" + todayStr().split("-").reverse().join("/") + "</small>";
+  if (RP_MODE !== "today") h += "<button class='btn btn-primary' onclick='runReport()'>Xem</button>";
+  f.innerHTML = h;
+  if (RP_MODE === "today") loadReport("ngay", todayStr());
+  else runReport();
+}
+function runReport() {
+  var v = document.getElementById("rp-val").value;
+  if (!v) { toast("Chọn thời gian trước"); return; }
+  if (RP_MODE === "day") loadReport("ngay", v);
+  else if (RP_MODE === "month") loadReport("thang", v);
+  else loadReport("nam", v);
+}
+function statCard(v, l) {
+  return "<div class='card stat'><div class='v'>" + esc(v) + "</div><div class='l'>" + esc(l) + "</div></div>";
+}
+function loadReport(che_do, gia_tri) {
+  var el = document.getElementById("rp-result");
+  el.innerHTML = "<p>Đang tải...</p>";
+  apiGet({api: "report", che_do: che_do, gia_tri: gia_tri}).then(function (r) {
+    var h = "<div class='stats'>" +
+      statCard(fmt(r.doanh_thu), "Doanh thu") +
+      statCard(r.so_don, "Số đơn") +
+      statCard(r.so_mon, "Món đã bán") + "</div>";
+    h += "<div class='card'><b>Top món bán chạy</b>";
+    if (!r.top_mon.length) h += "<p style='color:#888'>Chưa có dữ liệu kỳ này.</p>";
+    r.top_mon.forEach(function (t, i) {
+      h += "<div class='row'><div>" + (i + 1) + ". " + esc(t.ten_mon) + "</div>" +
+           "<div><b>" + t.so_luong + "</b> <small style='color:#888'>" + fmt(t.doanh_thu) + "</small></div></div>";
+    });
+    h += "</div>";
+    el.innerHTML = h;
+  }).catch(function (e) { el.innerHTML = "<p class='err'>" + esc(e.message) + "</p>"; });
+}
+function qrSettingsHTML() {
+  var c = CFG_ALL || {};
+  return "<div class='card'><b>Cài đặt mã QR thanh toán</b>" +
+    "<label style='display:block;margin:10px 0;font-size:15px'><input type='checkbox' id='qr_on'" +
+    (c.qr_bat === "BAT" ? " checked" : "") + " style='width:auto;vertical-align:middle'> In mã QR trên hóa đơn</label>" +
+    "<input id='qr_bank' placeholder='Mã ngân hàng (BIN), vd 970422 là MB' value='" + esc(c.qr_ngan_hang || "") + "' style='margin-bottom:8px'>" +
+    "<input id='qr_acc' placeholder='Số tài khoản nhận tiền' value='" + esc(c.qr_so_tk || "") + "' style='margin-bottom:8px'>" +
+    "<input id='qr_name' placeholder='Chủ tài khoản (viết không dấu)' value='" + esc(c.qr_chu_tk || "") + "' style='margin-bottom:8px'>" +
+    "<button class='btn btn-primary' onclick='saveQr()'>Lưu cài đặt</button>" +
+    "<p style='color:#888;font-size:12px'>Mã BIN phổ biến: 970422 MB, 970436 Vietcombank, 970415 VietinBank, 970418 BIDV, 970407 Techcombank, 970416 ACB.</p></div>";
+}
+function saveQr() {
+  var cfg = {
+    qr_bat: document.getElementById("qr_on").checked ? "BAT" : "TAT",
+    qr_ngan_hang: document.getElementById("qr_bank").value.trim(),
+    qr_so_tk: document.getElementById("qr_acc").value.trim(),
+    qr_chu_tk: document.getElementById("qr_name").value.trim()
+  };
+  apiPost({ action: "saveConfig", cau_hinh: cfg }).then(function () {
+    Object.keys(cfg).forEach(function (k) { CFG_ALL[k] = cfg[k]; });
+    toast("Đã lưu cài đặt QR");
+  }).catch(function (e) { toast(e.message); });
+}
+function qrURL(b) {
+  var c = CFG_ALL || {};
+  if (c.qr_bat !== "BAT" || !c.qr_so_tk || !c.qr_ngan_hang) return "";
+  var info = String(b.ma_don || "").replace(/[^A-Za-z0-9]/g, "");
+  return "https://img.vietqr.io/image/" + encodeURIComponent(c.qr_ngan_hang) + "-" +
+    encodeURIComponent(c.qr_so_tk) + "-compact2.png?amount=" + Math.round(b.pay) +
+    "&addInfo=" + encodeURIComponent(info) + "&accountName=" + encodeURIComponent(c.qr_chu_tk || "");
+}
+</script>
+</body>
+</html>
